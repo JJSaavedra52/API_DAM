@@ -1,5 +1,5 @@
 const { response, request } = require('express');
-const { Scans } = require('../models/mySqlScans.model');
+const { Scans, ScansLocal, ScansRemote } = require('../models/mySqlScans.model');
 
 // Helper: parse "geo:lat,lng" -> { lat, lng } or null
 const parseGeo = (geoString) => {
@@ -64,6 +64,7 @@ const scansByTypeGet = async (req, res = response) => {
 
 // POST /scans
 // body: { valor, location?, tipo? }
+// Inserts in the "active" DB (Scans). If DUPLICATE_TO_BOTH=true also attempts to insert in the other DB.
 const scansPost = async (req, res = response) => {
     const { valor, location, tipo } = req.body;
     if (!valor) return res.status(400).json({ ok: false, msg: 'Campo valor requerido' });
@@ -79,8 +80,27 @@ const scansPost = async (req, res = response) => {
     // If location not provided, prefer storing geo from valor when present
     const resolvedLocation = location ?? (valor.includes('geo') ? valor : null);
 
+    // Get usuarioId from authenticated user (set by validarJWT middleware) or from body (fallback)
+    const usuarioId = req.usuario ? req.usuario.id : (req.body.usuarioId ?? null);
+
     try {
-        const created = await Scans.create({ tipo: resolvedTipo, valor, location: resolvedLocation });
+        // Primary insert (into the model selected by USE_LOCAL_DB)
+        const created = await Scans.create({ tipo: resolvedTipo, valor, location: resolvedLocation, usuarioId });
+
+        // Optional: duplicate to the other DB (best-effort)
+        if (process.env.DUPLICATE_TO_BOTH === 'true') {
+            try {
+                // determine secondary target model
+                const secondary = Scans === ScansRemote ? ScansLocal : ScansRemote;
+                if (secondary) {
+                    await secondary.create({ tipo: resolvedTipo, valor, location: resolvedLocation, usuarioId });
+                }
+            } catch (dupErr) {
+                // don't fail the request if duplication fails
+                console.warn('Duplicate to secondary DB failed:', dupErr.message);
+            }
+        }
+
         res.json({ ok: true, msg: 'Scan INSERTADO', data: created });
     } catch (err) {
         console.error(err);
@@ -116,6 +136,20 @@ const scanDelete = async (req, res = response) => {
         const item = await Scans.findByPk(id);
         if (!item) return res.status(404).json({ ok: false, msg: `No existe scan con id: ${id}` });
         await item.destroy();
+
+        // Optional: also remove from other DB if DUPLICATE_TO_BOTH=true (best-effort)
+        if (process.env.DUPLICATE_TO_BOTH === 'true') {
+            try {
+                const secondary = Scans === ScansRemote ? ScansLocal : ScansRemote;
+                if (secondary) {
+                    // attempt to delete by matching valor (no distributed transaction guarantee)
+                    await secondary.destroy({ where: { valor: item.valor } });
+                }
+            } catch (dupErr) {
+                console.warn('Secondary delete failed:', dupErr.message);
+            }
+        }
+
         res.json({ ok: true, msg: 'Scan ELIMINADO', data: item });
     } catch (err) {
         console.error(err);
@@ -127,6 +161,16 @@ const scanDelete = async (req, res = response) => {
 const scansDeleteAll = async (req, res = response) => {
     try {
         await Scans.destroy({ where: {}, truncate: true });
+
+        if (process.env.DUPLICATE_TO_BOTH === 'true') {
+            try {
+                const secondary = Scans === ScansRemote ? ScansLocal : ScansRemote;
+                if (secondary) await secondary.destroy({ where: {}, truncate: true });
+            } catch (dupErr) {
+                console.warn('Secondary truncate failed:', dupErr.message);
+            }
+        }
+
         res.json({ ok: true, msg: 'Todos los scans eliminados' });
     } catch (err) {
         console.error(err);
@@ -168,6 +212,20 @@ const scansDistancePost = async (req, res = response) => {
     }
 };
 
+// GET /scans/me  -> scans for authenticated user
+const scansGetByUser = async (req, res = response) => {
+    try {
+        const user = req.usuario; // validar-jwt debe setear req.usuario
+        if (!user) return res.status(401).json({ ok: false, msg: 'Token requerido' });
+
+        const items = await Scans.findAll({ where: { usuarioId: user.id } });
+        res.json({ ok: true, data: items });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ ok: false, msg: 'Hable con el Administrador', err });
+    }
+};
+
 module.exports = {
     scansGet,
     scanIdGet,
@@ -176,5 +234,6 @@ module.exports = {
     scanPut,
     scanDelete,
     scansDeleteAll,
-    scansDistancePost
+    scansDistancePost,
+    scansGetByUser
 };

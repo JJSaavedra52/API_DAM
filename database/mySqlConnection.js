@@ -1,25 +1,24 @@
+require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
-
 const bdmysql = new Sequelize(
-    'test',
-    'root',
-    '',
+    process.env.LOCAL_DB_NAME || 'test',
+    process.env.LOCAL_DB_USER || 'root',
+    process.env.LOCAL_DB_PASS || '',
     {
-        host: 'localhost',
-        port: '3306',
+        host: process.env.LOCAL_DB_HOST || 'localhost',
+        port: process.env.LOCAL_DB_PORT || '3306',
         dialect: 'mysql'
     }
 );
 
-
 const bdmysqlNube = new Sequelize(
-    'myDb',
-    'mydb',
-    'mariadb',
+    process.env.REMOTE_DB_NAME || 'myDb',
+    process.env.REMOTE_DB_USER || 'mydb',
+    process.env.REMOTE_DB_PASS || 'mariadb',
     {
-        host: 'monorail.proxy.rlwy.net',
-        port: '23251',
+        host: process.env.REMOTE_DB_HOST || 'monorail.proxy.rlwy.net',
+        port: process.env.REMOTE_DB_PORT || '23251',
         dialect: 'mysql'
     }
 );

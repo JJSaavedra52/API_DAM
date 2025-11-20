@@ -1,82 +1,48 @@
 const { DataTypes } = require('sequelize');
-const { bdmysqlNube } = require('../database/mySqlConnection');
+const { bdmysql, bdmysqlNube } = require('../database/mySqlConnection');
 
-const Usuarios = bdmysqlNube.define('usuarios',
-    {
-        // Model attributes are defined here
-        id: {
-            type: DataTypes.BIGINT,
-            allowNull: false,
-            primaryKey: true,
-            autoIncrement: true,
-        },
-        nombre: {
-            type: DataTypes.STRING(150),
-            allowNull: false,
-        },
-        correo: {
-            type: DataTypes.STRING(50),
-            allowNull: false,
-            unique: true,
-        },
-        password: {
-            type: DataTypes.STRING(250),
-            allowNull: false,
-        },
-        img: {
-            type: DataTypes.STRING(150),
-            allowNull: false,
-        },
-        rol: {
-            type: DataTypes.ENUM('ADMIN_ROLE', 'USER_ROLE'),
-            allowNull: true,
-        },
-        estado: {
-            type: DataTypes.BOOLEAN,
-            allowNull: false,
-            defaultValue: true,
-        },
-        google: {
-            type: DataTypes.BOOLEAN,
-            allowNull: false,
-        },
-        fecha_creacion: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW,
-        },
-        fecha_actualizacion: {
-            type: DataTypes.DATE,
-            allowNull: true,
-        },
-
-
+const commonFields = {
+    id: {
+        type: DataTypes.BIGINT,
+        allowNull: false,
+        primaryKey: true,
+        autoIncrement: true,
     },
-
-
-
-
-    {
-        //Maintain table name don't plurilize
-        freezeTableName: true,
-
-
-
-
-        // I don't want createdAt
-        createdAt: false,
-
-
-
-
-        // I don't want updatedAt
-        updatedAt: false
+    nombre: {
+        type: DataTypes.STRING(150),
+        allowNull: false,
+    },
+    correo: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        unique: true,
+    },
+    password: {
+        type: DataTypes.STRING(250),
+        allowNull: false,
+    },
+    estado: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    },
+    fecha_creacion: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW,
     }
-);
+};
 
+const opts = { freezeTableName: true, createdAt: false, updatedAt: false };
 
+const UsuariosLocal = bdmysql.define('usuarios', commonFields, opts);
+const UsuariosRemote = bdmysqlNube.define('usuarios', commonFields, opts);
 
+// Exportar el modelo "activo" según USE_LOCAL_DB, y también los dos concretos
+const Usuarios = process.env.USE_LOCAL_DB === 'true' ? UsuariosLocal : UsuariosRemote;
 
 module.exports = {
-    Usuarios
-}
+    Usuarios,
+    UsuariosLocal,
+    UsuariosRemote
+};

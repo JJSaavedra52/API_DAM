@@ -7,33 +7,28 @@ const {
     scanPut,
     scanDelete,
     scansDeleteAll,
-    scansDistancePost
+    scansDistancePost,
+    scansGetByUser
 } = require('../controllers/scan.controller');
+const { validarJWT } = require('../middlewares/validar-jwt');
 
 const router = Router();
 
-// GET /scans
+// Rutas protegidas (requieren x-token)
+router.get('/me', validarJWT, scansGetByUser);
+router.post('/', validarJWT, scansPost);  // <-- AÑADE validarJWT aquí
+
+// Rutas públicas
 router.get('/', scansGet);
-
-// GET /scans/:id
 router.get('/:id', scanIdGet);
-
-// GET /scans/type/:tipo
 router.get('/type/:tipo', scansByTypeGet);
 
-// POST /scans
-router.post('/', scansPost);
+// Otras rutas protegidas (opcional)
+router.put('/:id', validarJWT, scanPut);
+router.delete('/:id', validarJWT, scanDelete);
+router.delete('/', validarJWT, scansDeleteAll);
 
-// PUT /scans/:id
-router.put('/:id', scanPut);
-
-// DELETE /scans/:id
-router.delete('/:id', scanDelete);
-
-// DELETE /scans (optional: delete all scans)
-router.delete('/', scansDeleteAll);
-
-// POST /scans/distance
+// Distancia puede ser pública o protegida según prefieras
 router.post('/distance', scansDistancePost);
 
 module.exports = router;
